@@ -18,6 +18,15 @@ int32_t sh_ceg_scm_prepare(const struct sh_observer *o, HMODULE client);
  * client service (bounded) and end that service manager. Otherwise no-op.
  */
 void sh_ceg_scm_release(const struct sh_observer *o);
+/* The two above on a worker thread with an overall bound, since a call into a
+ * service manager that never answers blocks for good. On timeout they report
+ * ceg-scm-timeout (the bound in seconds) and end the service manager this host
+ * started; the worker is left blocked and the caller must end the host at once,
+ * with no cleanup. prepare returns SH_CEG_SCM_TIMEOUT and sets *timed_out then;
+ * release returns false.
+ */
+int32_t sh_ceg_scm_prepare_bounded(const struct sh_observer *o, HMODULE client, bool *timed_out);
+bool sh_ceg_scm_release_bounded(const struct sh_observer *o);
 /* ml2014: `dockhost.exe --start-services` (Madeira's one-time-install batch):
  * make Wine's service manager reachable, starting services.exe only when none
  * answers, and leave it running for the session. Returns enum sh_install_scm

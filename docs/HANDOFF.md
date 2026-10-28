@@ -162,13 +162,27 @@ process handle opened while the service ran is terminated (only in this
 host-started manager's session). Then TerminateProcess our services.exe.
 Otherwise no-op. Abrupt host termination skips this cleanup.
 
+Both steps are bounded as a whole (`sh_ceg_scm_prepare_bounded`,
+`sh_ceg_scm_release_bounded`), like ml2015's `--start-services`: an
+OpenSCManagerW on a manager whose RPC pipe never answers does not return, and
+in the launch it left the starting screen on "License confirmed" with no
+further field; at exit it kept `probe-result` from being written. Each step
+runs on a worker; preparation gets 120 s and release 60 s, more than every
+bound inside them (manager start 30 s, Valve's installer 60 s + 5 s; service
+stop 15 s + 1 s + 5 s, manager end 5 s), so only a call that never returns
+reaches it. Then the host reports `ceg-scm-timeout=<seconds>` (round ml2000),
+ends the services.exe it started, and ends itself at once with no cleanup (the
+blocked call may hold loader or RPC locks): after preparation with
+`ceg-result=-6`, `launch-host-result=49` and `probe-result=49` (nothing has
+been published to the registry yet), after release with its `probe-result`.
+
 Report lines (round **ml2000**): `ceg-scm=1/0` reachable (already running or
 started), `ceg-scm-started=1` when this host spawned services.exe,
 `ceg-scm-error=<Win32 error>` (open/spawn failure, 1067 manager exited,
 1460 30 s timeout, or a non-1060 OpenServiceW error), `ceg-service-registered=0/1`,
 at exit `ceg-service-stop=<code>` (0 not running, 1 stopped via SCM, 2 process
 ended after bound, -1 failed/manager already gone) and `ceg-scm-stopped=1/0`.
-`ceg-result` keeps round ml1990 with new values -4/-5. Pure decisions
+`ceg-result` keeps round ml1990 with new values -4/-5 (and -6, the bound above). Pure decisions
 (absent/retryable errors, -4/-5 mapping, bounded remaining time, stop outcome)
 are in validation.c with 21 new sanitizer assertions. Rollback:
 `MADEIRA_DOCK_CEG_SCM=0` (ml1990 behaviour). Static evidence only: Wine

@@ -264,7 +264,21 @@ int sh_launch(HMODULE module, void *engine, void *client_user,
              * It stays up for the game run and is ended at host exit.
              * MADEIRA_DOCK_CEG_SCM=0 restores the ml1990 behaviour.
              */
-            int32_t scm = wide_flag(L"MADEIRA_DOCK_CEG_SCM", L'0') ? 0 : sh_ceg_scm_prepare(o, module);
+            bool scm_timed_out = false;
+            int32_t scm = wide_flag(L"MADEIRA_DOCK_CEG_SCM", L'0') ? 0 :
+                sh_ceg_scm_prepare_bounded(o, module, &scm_timed_out);
+            if (scm_timed_out) {
+                /* The blocked call may hold loader or RPC locks (ml2015), and the
+                 * shutdown after this needs the same service manager: report the
+                 * end of the launch and of the host, then end it at once. Nothing
+                 * has been published to the registry yet, so there is nothing to
+                 * restore.
+                 */
+                o->event("ceg-result", scm);
+                o->event("launch-host-result", 49);
+                o->event("probe-result", 49);
+                TerminateProcess(GetCurrentProcess(), 49);
+            }
             if (scm) {
                 o->event("ceg-result", scm);
                 result = 49;

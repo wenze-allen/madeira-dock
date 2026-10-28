@@ -327,9 +327,14 @@ done:
     }
     /* ml2000: after Valve's client has shut down, end the service manager
      * this host started for CEG (no-op when it was already running), so a
-     * leftover service process cannot keep the app's session alive.
+     * leftover service process cannot keep the app's session alive. Bounded:
+     * if the manager stopped answering, the host still reports its result and
+     * ends (ml2015: no exit cleanup behind a blocked service-manager call).
      */
-    sh_ceg_scm_release(&host_observer);
+    if (!sh_ceg_scm_release_bounded(&host_observer)) {
+        event("probe-result", result);
+        TerminateProcess(GetCurrentProcess(), (UINT)result);
+    }
     if (!enabled(L"MADEIRA_STEAM_HOST_SESSION"))
         event("ownership-unchecked-game-launch-disabled", 1);
     event("probe-result", result);

@@ -268,6 +268,82 @@ void sh_ceg_scm_release(const struct sh_observer *o)
     manager_process = NULL;
 }
 
+/* ml2015's bound (`--start-services`, main.c), for the two service-manager
+ * steps of a launch. OpenSCManager blocks for good on a manager whose RPC pipe
+ * never answers; in the launch that left the starting screen on "License
+ * confirmed" with no further field, and at host exit it kept probe-result from
+ * ever being written. Each step runs on a worker; a bound is longer than every
+ * bound inside its step (manager start 30 s, Valve's installer 60 s + 5 s;
+ * service stop 15 s + 1 s + 5 s, manager end 5 s), so only a call that never
+ * returns reaches it. A blocked call cannot be cancelled and may hold loader
+ * or RPC locks, so the caller ends the host then, with no cleanup.
+ */
+#define SH_CEG_SCM_STEP_MS (2 * 60 * 1000)
+#define SH_CEG_SCM_RELEASE_MS (60 * 1000)
+
+struct scm_step { const struct sh_observer *o; HMODULE client; volatile int32_t result; };
+
+static DWORD WINAPI prepare_worker(void *param)
+{
+    struct scm_step *step = param;
+    step->result = sh_ceg_scm_prepare(step->o, step->client);
+    return 0;
+}
+
+static DWORD WINAPI release_worker(void *param)
+{
+    struct scm_step *step = param;
+    sh_ceg_scm_release(step->o);
+    return 0;
+}
+
+/* False when the worker is still running after `bound` ms (it is left blocked). */
+static bool run_bounded(LPTHREAD_START_ROUTINE worker, struct scm_step *step, DWORD bound)
+{
+    HANDLE thread = CreateThread(NULL, 0, worker, step, 0, NULL);
+    if (!thread) {
+        worker(step);
+        return true;
+    }
+    bool done = WaitForSingleObject(thread, bound) == WAIT_OBJECT_0;
+    CloseHandle(thread);
+    return done;
+}
+
+/* The step's seconds, and the service manager this host started is ended so it
+ * cannot keep the app's session alive. Its handle stays open: the blocked worker
+ * may still hold it, and the host ends next.
+ */
+static void abandon(const struct sh_observer *o, DWORD bound)
+{
+    o->event("ceg-scm-timeout", (int32_t)(bound / 1000));
+    if (manager_process) TerminateProcess(manager_process, 0);
+}
+
+int32_t sh_ceg_scm_prepare_bounded(const struct sh_observer *o, HMODULE client, bool *timed_out)
+{
+    static struct scm_step step;   /* outlives a worker left blocked */
+    step.o = o;
+    step.client = client;
+    step.result = 0;
+    *timed_out = !run_bounded(prepare_worker, &step, SH_CEG_SCM_STEP_MS);
+    if (!*timed_out) return step.result;
+    abandon(o, SH_CEG_SCM_STEP_MS);
+    return SH_CEG_SCM_TIMEOUT;
+}
+
+bool sh_ceg_scm_release_bounded(const struct sh_observer *o)
+{
+    static struct scm_step step;
+    if (!manager_process) return true;
+    step.o = o;
+    step.client = NULL;
+    step.result = 0;
+    if (run_bounded(release_worker, &step, SH_CEG_SCM_RELEASE_MS)) return true;
+    abandon(o, SH_CEG_SCM_RELEASE_MS);
+    return false;
+}
+
 /* ml2014: `dockhost.exe --start-services`. Madeira's one-time-install batch
  * runs this before a game's installers: Windows installers expect a service
  * manager, and a Dock session otherwise starts none before this host. Only

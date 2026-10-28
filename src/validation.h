@@ -42,10 +42,12 @@ enum sh_ceg_step sh_ceg_record_job(struct sh_ceg_progress *progress, int32_t res
 
 /* ml2000: Wine's service manager, which Valve's client needs to reach its own
  * client service for CEG work. ceg-result -4: the service manager could not
- * be reached; -5: Valve's client service is not registered in this prefix.
+ * be reached; -5: Valve's client service is not registered in this prefix;
+ * -6: a call into the service manager did not return within its bound.
  */
 #define SH_CEG_SCM_UNAVAILABLE (-4)
 #define SH_CEG_SERVICE_UNREGISTERED (-5)
+#define SH_CEG_SCM_TIMEOUT (-6)
 enum sh_service_stop { SH_SERVICE_STOP_FAILED = -1, SH_SERVICE_NOT_RUNNING = 0,
                        SH_SERVICE_STOPPED = 1, SH_SERVICE_ENDED_AFTER_BOUND = 2 };
 /* True only for "no service manager is listening" (so one may be started). */

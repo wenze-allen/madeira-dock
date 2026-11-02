@@ -176,6 +176,13 @@ blocked call may hold loader or RPC locks): after preparation with
 `ceg-result=-6`, `launch-host-result=49` and `probe-result=49` (nothing has
 been published to the registry yet), after release with its `probe-result`.
 
+Every exit path reports `host-result=<code>` (round ml1830) before Valve's
+client is shut down, and `probe-result` after it. That shutdown has no time
+limit, and a sign-in or licence failure ends before the launch writes
+`launch-host-result`, so `host-result` is the one an app waits for. The two
+differ only when the shutdown (`SH_RELEASE_FAILED`) or the release above
+fails.
+
 Report lines (round **ml2000**): `ceg-scm=1/0` reachable (already running or
 started), `ceg-scm-started=1` when this host spawned services.exe,
 `ceg-scm-error=<Win32 error>` (open/spawn failure, 1067 manager exited,

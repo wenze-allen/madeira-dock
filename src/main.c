@@ -319,6 +319,14 @@ int main(int argc, char **argv)
      * Full engine shutdown and repeated sessions need separate device evidence.
      */
 done:
+    /* The host's result before Valve's client is shut down: that shutdown has no
+     * time limit, and probe-result follows it. A sign-in or licence failure
+     * (session.c) ends before the launch writes launch-host-result, so without
+     * this the app learnt why the start stopped only once the shutdown finished,
+     * and never when it hung. probe-result differs only when the shutdown or the
+     * service-manager release fails after it.
+     */
+    event("host-result", result);
     if (public_client) {
         event("shutdown-begin", 0);
         bool stopped = shutdown_client(public_client);

@@ -272,13 +272,19 @@ void sh_ceg_scm_release(const struct sh_observer *o)
  * steps of a launch. OpenSCManager blocks for good on a manager whose RPC pipe
  * never answers; in the launch that left the starting screen on "License
  * confirmed" with no further field, and at host exit it kept probe-result from
- * ever being written. Each step runs on a worker; a bound is longer than every
- * bound inside its step (manager start 30 s, Valve's installer 60 s + 5 s;
- * service stop 15 s + 1 s + 5 s, manager end 5 s), so only a call that never
- * returns reaches it. A blocked call cannot be cancelled and may hold loader
- * or RPC locks, so the caller ends the host then, with no cleanup.
+ * ever being written. Each step runs on a worker; a bound is longer than all
+ * the bounds inside its step together, so only a call that never returns
+ * reaches it. Preparation: manager start 30 s, Valve's installer 60 s + 5 s,
+ * and, where Madeira's build applies its build/dock-patches/0001 (it starts
+ * Valve's client service before the CEG request), that start too: twice at
+ * most, each StartServiceW (Wine's services.exe waits 10 s by default for the
+ * service's pipe, more when ServicesPipeTimeout is raised) and 30 s for the
+ * service to run, then a 2 s settle; about 200 s in all, so 5 min. Release:
+ * service stop 15 s + 1 s + 5 s, manager end 5 s. A blocked call cannot be
+ * cancelled and may hold loader or RPC locks, so the caller ends the host
+ * then, with no cleanup.
  */
-#define SH_CEG_SCM_STEP_MS (2 * 60 * 1000)
+#define SH_CEG_SCM_STEP_MS (5 * 60 * 1000)
 #define SH_CEG_SCM_RELEASE_MS (60 * 1000)
 
 struct scm_step { const struct sh_observer *o; HMODULE client; volatile int32_t result; };

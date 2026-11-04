@@ -167,10 +167,13 @@ Both steps are bounded as a whole (`sh_ceg_scm_prepare_bounded`,
 OpenSCManagerW on a manager whose RPC pipe never answers does not return, and
 in the launch it left the starting screen on "License confirmed" with no
 further field; at exit it kept `probe-result` from being written. Each step
-runs on a worker; preparation gets 120 s and release 60 s, more than every
-bound inside them (manager start 30 s, Valve's installer 60 s + 5 s; service
-stop 15 s + 1 s + 5 s, manager end 5 s), so only a call that never returns
-reaches it. Then the host reports `ceg-scm-timeout=<seconds>` (round ml2000),
+runs on a worker; preparation gets 5 min and release 60 s, more than all the
+bounds inside them together, so only a call that never returns reaches it:
+manager start 30 s and Valve's installer 60 s + 5 s, plus, where Madeira's
+build/dock-patches/0001 starts Valve's client service before the CEG request,
+up to two starts of it (Wine's service manager waits 10 s by default for its
+pipe; 30 s for it to run) and a 2 s settle, about 200 s in all; service stop
+15 s + 1 s + 5 s and manager end 5 s. Then the host reports `ceg-scm-timeout=<seconds>` (round ml2000),
 ends the services.exe it started, and ends itself at once with no cleanup (the
 blocked call may hold loader or RPC locks): after preparation with
 `ceg-result=-6`, `launch-host-result=49` and `probe-result=49` (nothing has
